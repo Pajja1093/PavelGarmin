@@ -1,0 +1,1259 @@
+﻿@page "/garmin-dashboard"
+@using MyGarmin.Components.Models
+@using MyGarmin.Components.Services
+@inject GarminService GarminService
+@inject IConfiguration Configuration
+
+<div class="glass-bg">
+    <h3 class="dash-title">Moje Garmin Aktivity</h3>
+
+
+    @if (isLoading)
+    {
+        <div class="dash-loader" role="status" aria-live="polite">
+            <div class="loader-orb">
+                <span class="loader-ring"></span>
+                <span class="loader-ring r2"></span>
+                <svg class="loader-heart" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 20.5s-8-5-8-11A4.6 4.6 0 0 1 12 6.8 4.6 4.6 0 0 1 20 9.5c0 6-8 11-8 11z" />
+                </svg>
+            </div>
+
+            <svg class="loader-ecg" viewBox="0 0 240 40" preserveAspectRatio="none" aria-hidden="true">
+                <path pathLength="100" d="M0 22 H60 L68 22 L76 6 L86 36 L94 22 H140 L148 22 L156 6 L166 36 L174 22 H240" />
+            </svg>
+
+            <div class="loader-title">
+                Načítám aktivity z Garminu<span class="loader-dots"><i></i><i></i><i></i></span>
+            </div>
+            <div class="loader-sub">Stahuji všechny záznamy, chvíli to může trvat</div>
+        </div>
+    }
+    else if (Activities == null || Activities.Count() == 0)
+    {
+        <span class="dash-msg">
+            No activities to view
+        </span>
+    }
+    else
+    {
+        <div class="dash-types" role="group" aria-label="Typ aktivity">
+            <button type="button" class="type-chip @(activityType == "all" ? "active" : "")" @onclick="@(() => SetActivityType("all"))">
+                Vše
+            </button>
+
+            @foreach (var type in activityTypeList)
+            {
+                <button type="button" class="type-chip @(activityType == type ? "active" : "")" @onclick="@(() => SetActivityType(type))">
+                    @type.Replace('_', ' ')
+                </button>
+            }
+        </div>
+
+        <div class="dash-toolbar">
+            <div class="dash-sorts">
+                <div class="dash-sort" role="group" aria-label="Řazení">
+                    <span class="dash-sort-label">Řazení</span>
+
+                    <button type="button" class="sort-btn @(activeSort == "newest" ? "active" : "")" @onclick="OrderByDateDesc">
+                        Od nejnovější
+                    </button>
+                    <button type="button" class="sort-btn @(activeSort == "oldest" ? "active" : "")" @onclick="OrderByDateAsc">
+                        Od nejstarší
+                    </button>
+                    <button type="button" class="sort-btn @(activeSort == "name" ? "active" : "")" @onclick="OrderByNameAlph">
+                        Abecedně
+                    </button>
+                </div>
+
+                <div class="dash-sort" role="group" aria-label="Výkon">
+                    <span class="dash-sort-label">Výkon</span>
+
+                    <button type="button" class="sort-btn @(activeSort == "fastest" ? "active" : "")" @onclick="OrderByFastest">
+                        Nejrychlejší
+                    </button>
+                    <button type="button" class="sort-btn @(activeSort == "slowest" ? "active" : "")" @onclick="OrderBySlowest">
+                        Nejpomalejší
+                    </button>
+                    <button type="button" class="sort-btn @(activeSort == "longest" ? "active" : "")" @onclick="OrderByLongest">
+                        Nejdelší
+                    </button>
+                    <button type="button" class="sort-btn @(activeSort == "shortest" ? "active" : "")" @onclick="OrderByShortest">
+                        Nejkratší
+                    </button>
+                </div>
+            </div>
+
+            <div class="dash-count">Záznamů: <strong>@VisibleActivities.Count()</strong></div>
+        </div>
+
+        <div class="dash-grid">
+            @foreach (var Activity in VisibleActivities)
+            {
+                <div @key="Activity.ActivityId" class="card act-card @(Activity.IsPR ? "is-pr" : "")">
+
+                    <div class="act-cover">
+                        <span class="act-type" title="@Activity.EventType">@Activity.EventType</span>
+
+                        @if (Activity.IsPR)
+                        {
+                            <span class="act-crown" title="Osobní rekord">
+                                <svg viewBox="0 0 24 24" aria-hidden="true">
+                                    <path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5L3 8z" />
+                                    <path class="band" d="M5.5 19h13" />
+                                </svg>
+                            </span>
+                        }
+                    </div>
+
+                    <div class="card-body">
+                        <h4 class="card-title" title="@Activity.ActivityName">@Activity.ActivityName</h4>
+
+                        <div class="act-date">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <rect x="3" y="5" width="18" height="16" rx="3" />
+                                <path d="M3 10h18M8 3v4M16 3v4" />
+                                <rect class="cal-day" x="7.5" y="13" width="3.5" height="3.5" rx="1" />
+                            </svg>
+                            <span title="@Activity.StartTimeLocal">@Activity.StartTimeLocal</span>
+                        </div>
+
+
+                        @if (Activity.Distance > 0)
+                        {
+                            <div class="act-hero">
+                                <div class="act-hero-icon">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                                        <g class="pin">
+                                            <path d="M12 21s-6-5.2-6-10a6 6 0 1 1 12 0c0 4.8-6 10-6 10z" />
+                                            <circle cx="12" cy="11" r="2.2" />
+                                        </g>
+                                        <ellipse class="pin-shadow" cx="12" cy="22.4" rx="3.2" ry="0.9" />
+                                    </svg>
+                                </div>
+                                <div class="act-hero-text">
+                                    <span class="act-label">Vzdálenost</span>
+                                    <div class="act-hero-value">@Activity.Distance?.ToString("0.00")<small>km</small></div>
+                                </div>
+                            </div>
+                        }
+
+                        <div class="act-grid">
+
+                            <div class="act-tile time">
+                                <div class="act-tile-head">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                                        <circle cx="12" cy="13" r="8" />
+                                        <path d="M9 3h6" />
+                                        <path class="clock-hand" d="M12 13V8.5" />
+                                        <path class="clock-hand-s" d="M12 13l2.6 1.6" />
+                                    </svg>
+                                    <span class="act-label">Čas</span>
+                                </div>
+                                <div class="act-num">@Activity.Duration?.ToString(@"hh\:mm\:ss\.ff") </div>
+                            </div>
+
+                            <div class="act-tile speed">
+                                <div class="act-tile-head">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17a8 8 0 1 1 16 0" /><path class="needle" d="M12 17l4-5" /></svg>
+                                    <span class="act-label">Rychlost</span>
+                                </div>
+                                <div class="act-num">@Activity.AverageSpeed?.ToString("0.00")<small>km/h</small></div>
+                            </div>
+
+                            <div class="act-tile hr">
+                                <div class="act-tile-head">
+                                    <svg class="heart" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-8-5-8-11A4.6 4.6 0 0 1 12 6.8 4.6 4.6 0 0 1 20 9.5c0 6-8 11-8 11z" /></svg>
+                                    <span class="act-label">Tep</span>
+                                    <svg class="ecg" viewBox="0 0 120 30" preserveAspectRatio="none" aria-hidden="true">
+                                        <path pathLength="100" d="M0 16 H18 L22 16 L26 7 L31 25 L35 16 H58 L62 16 L66 7 L71 25 L75 16 H120" />
+                                    </svg>
+                                </div>
+                                <div class="act-num">@Activity.AverageHR<small>bpm</small></div>
+                            </div>
+
+                            <div class="act-tile cal">
+                                <div class="act-tile-head">
+                                    <svg class="flame" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2 1-3 2-4 .2 1.4.9 2 1.7 2C10.2 8 11 5.5 12 3z" /></svg>
+                                    <span class="act-label">Kalorie</span>
+                                </div>
+                                <div class="act-num">@Activity.Calories<small>kcal</small></div>
+                            </div>
+
+                        </div>
+
+                        <div class="act-footer">
+                            <span class="act-pill pr @(Activity.IsPR ? "on" : "")">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v5a4 4 0 0 1-8 0V4zM8 6H4v1a4 4 0 0 0 4 4M16 6h4v1a4 4 0 0 1-4 4M12 13v4M8 20h8" /></svg>
+                                PR
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<style>
+    /* ===== pozadí stránky (statické, vykreslí se jednou) ===== */
+    .glass-bg {
+        min-height: 100vh;
+        padding: 28px 24px 48px;
+        border-radius: 24px;
+        background: radial-gradient(620px 420px at 8% 10%, rgba(124, 77, 255, .5), transparent 70%), radial-gradient(580px 440px at 96% 92%, rgba(217, 70, 239, .3), transparent 70%), radial-gradient(520px 360px at 72% 18%, rgba(139, 92, 246, .22), transparent 70%), linear-gradient(160deg, #1a0b3b 0%, #0e0720 55%, #160a30 100%);
+        color: #f1ebff;
+    }
+
+    .dash-title {
+        margin: 0 0 22px;
+        font-size: 28px;
+        font-weight: 800;
+        letter-spacing: -.5px;
+        color: #fff;
+    }
+
+    .dash-msg {
+        color: #b9a7e6;
+    }
+
+    /* ===== načítací obrazovka ===== */
+    .dash-loader {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        max-width: 440px;
+        margin: 8vh auto 0;
+        padding: 40px 28px 34px;
+        text-align: center;
+        border-radius: 26px;
+        border: 1px solid rgba(255, 255, 255, .16);
+        background: linear-gradient(135deg, rgba(255, 255, 255, .12), rgba(255, 255, 255, .04)), rgba(30, 16, 70, .4);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22), 0 18px 40px -18px rgba(8, 2, 24, .9);
+    }
+
+    .loader-orb {
+        position: relative;
+        width: 84px;
+        height: 84px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        background: radial-gradient(circle at 35% 30%, rgba(249, 168, 212, .35), rgba(139, 92, 246, .18));
+        border: 1px solid rgba(249, 168, 212, .4);
+        box-shadow: 0 0 30px rgba(244, 114, 182, .35);
+    }
+
+    .loader-ring {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        border: 2px solid rgba(249, 168, 212, .55);
+        animation: ld-ring 2s ease-out infinite;
+    }
+
+        .loader-ring.r2 {
+            animation-delay: 1s;
+        }
+
+    .loader-heart {
+        width: 38px;
+        height: 38px;
+        fill: #f9a8d4;
+        stroke: #fff;
+        stroke-width: 1.2;
+        stroke-linejoin: round;
+        filter: drop-shadow(0 0 8px rgba(249, 168, 212, .8));
+        transform-origin: center;
+        animation: act-beat 1.1s ease-in-out infinite;
+    }
+
+    .loader-ecg {
+        width: 100%;
+        max-width: 280px;
+        height: 40px;
+    }
+
+        .loader-ecg path {
+            fill: none;
+            stroke: #f9a8d4;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            vector-effect: non-scaling-stroke;
+            stroke-dasharray: 100;
+            stroke-dashoffset: 100;
+            filter: drop-shadow(0 0 4px rgba(249, 168, 212, .8));
+            animation: ld-ecg 2.2s linear infinite;
+        }
+
+    .loader-title {
+        font-size: 18px;
+        font-weight: 700;
+        color: #fff;
+    }
+
+    .loader-dots {
+        display: inline-flex;
+        gap: 4px;
+        margin-left: 6px;
+        vertical-align: middle;
+    }
+
+        .loader-dots i {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #d7c2ff;
+            animation: ld-dot 1.2s ease-in-out infinite;
+        }
+
+            .loader-dots i:nth-child(2) {
+                animation-delay: .15s;
+            }
+
+            .loader-dots i:nth-child(3) {
+                animation-delay: .3s;
+            }
+
+    .loader-sub {
+        margin-top: -8px;
+        font-size: 12px;
+        color: #b9a7e6;
+    }
+
+    /* ===== filtr podle typu aktivity ===== */
+    .dash-types {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 14px;
+        animation: dash-fade .4s ease both;
+    }
+
+    .type-chip {
+        appearance: none;
+        padding: 6px 14px;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, .14);
+        background: rgba(255, 255, 255, .05);
+        color: #cdbdf2;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: capitalize;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background .15s ease, color .15s ease, border-color .15s ease;
+    }
+
+        .type-chip:hover {
+            background: rgba(255, 255, 255, .1);
+            color: #fff;
+        }
+
+        .type-chip:focus-visible {
+            outline: 2px solid #b794ff;
+            outline-offset: 2px;
+        }
+
+        .type-chip.active {
+            background: rgba(139, 92, 246, .35);
+            border-color: rgba(196, 168, 255, .6);
+            color: #fff;
+        }
+
+    /* ===== ovládací panel (řazení + počet) ===== */
+    .dash-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 20px;
+        animation: dash-fade .4s ease both;
+    }
+
+    .dash-sorts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        min-width: 0;
+    }
+
+    .dash-sort {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        max-width: 100%;
+        padding: 4px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, .06);
+        border: 1px solid rgba(255, 255, 255, .14);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12);
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+
+        .dash-sort::-webkit-scrollbar {
+            display: none;
+        }
+
+    .dash-sort-label {
+        padding: 0 8px 0 12px;
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: .1em;
+        color: #8f7cc4;
+        white-space: nowrap;
+    }
+
+    .sort-btn {
+        appearance: none;
+        border: 0;
+        background: transparent;
+        color: #cdbdf2;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        padding: 7px 14px;
+        border-radius: 999px;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background .15s ease, color .15s ease, box-shadow .15s ease;
+    }
+
+        .sort-btn:hover {
+            background: rgba(255, 255, 255, .09);
+            color: #fff;
+        }
+
+        .sort-btn:focus-visible {
+            outline: 2px solid #b794ff;
+            outline-offset: 2px;
+        }
+
+        .sort-btn.active {
+            background: linear-gradient(135deg, #8b5cf6, #6d3df0);
+            color: #fff;
+            box-shadow: 0 4px 14px -4px rgba(139, 92, 246, .8), inset 0 1px 0 rgba(255, 255, 255, .25);
+        }
+
+    .dash-count {
+        padding: 7px 14px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, .05);
+        border: 1px solid rgba(255, 255, 255, .1);
+        font-size: 12px;
+        color: #b9a7e6;
+        white-space: nowrap;
+    }
+
+        .dash-count strong {
+            margin-left: 2px;
+            color: #fff;
+            font-variant-numeric: tabular-nums;
+        }
+
+    .dash-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(min(310px, 100%), 1fr));
+        gap: 20px;
+        min-width: 0;
+        animation: dash-fade .5s ease both;
+    }
+
+    /* ===== skleněná karta (bez blur filtru) ===== */
+    .act-card {
+        --g-text: #f4efff;
+        --g-muted: #b9a7e6;
+        --g-dim: #8f7cc4;
+        position: relative;
+        width: auto !important;
+        min-width: 0;
+        height: 100%;
+        border-radius: 22px;
+        border: 1px solid rgba(255, 255, 255, .18);
+        background: linear-gradient(135deg, rgba(255, 255, 255, .13), rgba(255, 255, 255, .04)), rgba(30, 16, 70, .4);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22), 0 10px 26px -14px rgba(8, 2, 24, .8);
+        color: var(--g-text);
+        overflow: hidden;
+        content-visibility: auto;
+        contain-intrinsic-size: auto 430px;
+        transition: transform .18s ease, border-color .18s ease;
+    }
+
+        .act-card:hover {
+            transform: translateY(-3px);
+            border-color: rgba(196, 168, 255, .6);
+        }
+
+        /* PR: jemné zlaté ohraničení */
+        .act-card.is-pr {
+            border-color: rgba(251, 191, 36, .55);
+            box-shadow: inset 0 1px 0 rgba(255, 236, 170, .28), 0 0 0 1px rgba(251, 191, 36, .12), 0 0 24px -8px rgba(251, 191, 36, .4);
+        }
+
+            .act-card.is-pr:hover {
+                border-color: rgba(251, 191, 36, .9);
+            }
+
+    /* ===== horní řádek ===== */
+    .act-cover {
+        position: relative;
+        flex: 0 0 52px;
+        height: 52px;
+        display: flex;
+        align-items: center;
+        padding: 0 14px 0 16px;
+    }
+
+    .act-type {
+        max-width: calc(100% - 56px);
+        padding: 5px 12px;
+        border-radius: 999px;
+        background: rgba(139, 92, 246, .24);
+        border: 1px solid rgba(196, 168, 255, .35);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        color: #e4d6ff;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .act-card.is-pr .act-type {
+        background: rgba(251, 191, 36, .16);
+        border-color: rgba(251, 191, 36, .45);
+        color: #ffe9a8;
+    }
+
+    /* ===== korunka ===== */
+    .act-crown {
+        position: absolute;
+        top: 50%;
+        right: 14px;
+        width: 30px;
+        height: 30px;
+        margin-top: -15px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        background: radial-gradient(circle at 30% 25%, rgba(251, 191, 36, .4), rgba(251, 191, 36, .12));
+        border: 1px solid rgba(251, 191, 36, .6);
+        box-shadow: 0 0 12px rgba(251, 191, 36, .4);
+    }
+
+        .act-crown svg {
+            width: 17px;
+            height: 17px;
+            fill: #fbbf24;
+            stroke: #fde68a;
+            stroke-width: 1.2;
+            stroke-linejoin: round;
+            stroke-linecap: round;
+        }
+
+            .act-crown svg .band {
+                fill: none;
+                stroke: #b45309;
+                stroke-width: 1.4;
+            }
+
+    /* ===== tělo ===== */
+    .act-card .card-body {
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        min-width: 0;
+        padding: 2px 18px 18px 18px;
+        background: transparent;
+    }
+
+    .act-card .card-title {
+        margin: 0;
+        min-height: calc(2 * 1.25em);
+        font-size: 18px;
+        font-weight: 700;
+        line-height: 1.25;
+        color: #fff;
+        overflow: hidden;
+        overflow-wrap: anywhere;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+    }
+
+    .act-date {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+        margin-top: -8px;
+        font-size: 12px;
+        color: var(--g-muted);
+    }
+
+        .act-date span {
+            min-width: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .act-date svg {
+            flex-shrink: 0;
+            width: 14px;
+            height: 14px;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 1.8;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+            .act-date svg .cal-day {
+                fill: currentColor;
+                stroke: none;
+                opacity: .55;
+            }
+
+    .act-label {
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: .1em;
+        color: var(--g-dim);
+        white-space: nowrap;
+    }
+
+    /* ===== hlavní metrika ===== */
+    .act-hero {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        min-width: 0;
+        padding: 12px 14px;
+        border-radius: 16px;
+        background: linear-gradient(135deg, rgba(139, 92, 246, .3), rgba(139, 92, 246, .08));
+        border: 1px solid rgba(196, 168, 255, .3);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, .15);
+    }
+
+    .act-hero-icon {
+        width: 40px;
+        height: 40px;
+        display: grid;
+        place-items: center;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, .1);
+        border: 1px solid rgba(255, 255, 255, .16);
+        flex-shrink: 0;
+    }
+
+        .act-hero-icon svg {
+            width: 22px;
+            height: 22px;
+            fill: none;
+            stroke: #d7c2ff;
+            stroke-width: 1.8;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            overflow: visible;
+        }
+
+            .act-hero-icon svg .pin-shadow {
+                fill: rgba(215, 194, 255, .45);
+                stroke: none;
+                transform-origin: 12px 22.4px;
+            }
+
+    .act-hero-text {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .act-hero-value {
+        font-size: 32px;
+        font-weight: 800;
+        line-height: 1.15;
+        letter-spacing: -1px;
+        font-variant-numeric: tabular-nums;
+        color: #fff;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+        .act-hero-value small,
+        .act-num small {
+            margin-left: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0;
+            color: var(--g-muted);
+        }
+
+    /* ===== dlaždice metrik ===== */
+    .act-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        grid-auto-rows: 1fr;
+        gap: 10px;
+    }
+
+    .act-tile {
+        --tone: #d7c2ff;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 8px;
+        min-width: 0;
+        min-height: 68px;
+        padding: 11px 12px;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, .06);
+        border: 1px solid rgba(255, 255, 255, .12);
+        overflow: hidden;
+    }
+
+        .act-tile.time {
+            --tone: #c4b5fd;
+        }
+
+        .act-tile.speed {
+            --tone: #93c5fd;
+        }
+
+        .act-tile.hr {
+            --tone: #f9a8d4;
+        }
+
+        .act-tile.cal {
+            --tone: #fcd34d;
+        }
+
+    .act-tile-head {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+        height: 16px;
+    }
+
+        .act-tile-head > svg:first-child {
+            flex-shrink: 0;
+            width: 15px;
+            height: 15px;
+            fill: none;
+            stroke: var(--tone);
+            stroke-width: 1.9;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+            .act-tile-head > svg:first-child .needle {
+                transform-origin: 12px 17px;
+            }
+
+            .act-tile-head > svg:first-child .clock-hand,
+            .act-tile-head > svg:first-child .clock-hand-s {
+                transform-origin: 12px 13px;
+            }
+
+    .act-num {
+        min-width: 0;
+        font-size: 15px;
+        font-weight: 700;
+        line-height: 1.2;
+        font-variant-numeric: tabular-nums;
+        color: #fff;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .act-tile.time .act-num {
+        font-size: 14px;
+    }
+
+    /* tep: srdíčko + EKG v hlavičce */
+    .heart {
+        fill: rgba(249, 168, 212, .3) !important;
+        transform-origin: center;
+    }
+
+    .act-tile-head .ecg {
+        flex: 1;
+        min-width: 20px;
+        height: 16px;
+    }
+
+        .act-tile-head .ecg path {
+            fill: none;
+            stroke: #f9a8d4;
+            stroke-width: 1.6;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            vector-effect: non-scaling-stroke;
+            stroke-dasharray: 100;
+            stroke-dashoffset: 0;
+            opacity: .9;
+        }
+
+    .flame {
+        fill: rgba(252, 211, 77, .25) !important;
+        transform-origin: 50% 100%;
+    }
+
+    /* ===== animace jen při najetí myší na kartu ===== */
+    .act-card:hover .act-crown {
+        animation: act-float 1.8s ease-in-out infinite;
+    }
+
+    .act-card:hover .heart {
+        animation: act-beat 1.1s ease-in-out infinite;
+    }
+
+    .act-card:hover .ecg path {
+        animation: act-ecg 2.2s linear infinite;
+    }
+
+    .act-card:hover .flame {
+        animation: act-flicker 1.4s ease-in-out infinite;
+    }
+
+    .act-card:hover .needle {
+        animation: act-needle 2.4s ease-in-out infinite;
+    }
+
+    /* hodiny */
+    .act-card:hover .clock-hand {
+        animation: act-spin 3s linear infinite;
+    }
+
+    .act-card:hover .clock-hand-s {
+        animation: act-spin 18s linear infinite;
+    }
+
+    /* špendlík + stín */
+    .act-card:hover .pin {
+        animation: act-hop 1.3s ease-in-out infinite;
+    }
+
+    .act-card:hover .pin-shadow {
+        animation: act-shadow 1.3s ease-in-out infinite;
+    }
+
+    /* kalendář: přeskakující den */
+    .act-card:hover .cal-day {
+        animation: act-day 2.7s ease-in-out infinite;
+    }
+
+    /* pohár u PR */
+    .act-card:hover .act-pill.on svg {
+        animation: act-wobble 1.4s ease-in-out infinite;
+        transform-origin: 50% 90%;
+    }
+
+    /* ===== patička ===== */
+    .act-footer {
+        display: flex;
+        gap: 8px;
+        margin-top: auto;
+        padding-top: 4px;
+    }
+
+    .act-pill {
+        flex: 1 1 0;
+        min-width: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 700;
+        white-space: nowrap;
+        overflow: hidden;
+        color: rgba(255, 255, 255, .4);
+        background: rgba(255, 255, 255, .05);
+        border: 1px solid rgba(255, 255, 255, .1);
+    }
+
+        .act-pill svg {
+            flex-shrink: 0;
+            width: 13px;
+            height: 13px;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 1.9;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .act-pill.pr.on {
+            color: #fde68a;
+            background: rgba(251, 191, 36, .16);
+            border-color: rgba(251, 191, 36, .45);
+        }
+
+    /* ===== animace ===== */
+    @@keyframes dash-fade {
+        from {
+            opacity: 0;
+            transform: translateY(8px);
+        }
+
+        to {
+            opacity: 1;
+            transform: none;
+        }
+    }
+
+    @@keyframes ld-ring {
+        0% {
+            transform: scale(1);
+            opacity: .8;
+        }
+
+        100% {
+            transform: scale(1.9);
+            opacity: 0;
+        }
+    }
+
+    @@keyframes ld-ecg {
+        0% {
+            stroke-dashoffset: 100;
+            opacity: 1;
+        }
+
+        65% {
+            stroke-dashoffset: 0;
+            opacity: 1;
+        }
+
+        100% {
+            stroke-dashoffset: 0;
+            opacity: 0;
+        }
+    }
+
+    @@keyframes ld-dot {
+        0%, 80%, 100% {
+            transform: translateY(0);
+            opacity: .45;
+        }
+
+        40% {
+            transform: translateY(-5px);
+            opacity: 1;
+        }
+    }
+
+    @@keyframes act-float {
+        0%, 100% {
+            transform: translateY(0);
+        }
+
+        50% {
+            transform: translateY(-3px);
+        }
+    }
+
+    @@keyframes act-beat {
+        0%, 100% {
+            transform: scale(1);
+        }
+
+        15% {
+            transform: scale(1.22);
+        }
+
+        30% {
+            transform: scale(1);
+        }
+
+        45% {
+            transform: scale(1.14);
+        }
+    }
+
+    @@keyframes act-ecg {
+        0% {
+            stroke-dashoffset: 100;
+            opacity: 1;
+        }
+
+        70% {
+            stroke-dashoffset: 0;
+            opacity: 1;
+        }
+
+        100% {
+            stroke-dashoffset: 0;
+            opacity: .9;
+        }
+    }
+
+    @@keyframes act-needle {
+        0%, 100% {
+            transform: rotate(-12deg);
+        }
+
+        50% {
+            transform: rotate(14deg);
+        }
+    }
+
+    @@keyframes act-flicker {
+        0%, 100% {
+            transform: scale(1, 1);
+        }
+
+        50% {
+            transform: scale(1.06, 1.12);
+        }
+    }
+
+    @@keyframes act-spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    @@keyframes act-hop {
+        0%, 100% {
+            transform: translateY(0);
+        }
+
+        35%, 50% {
+            transform: translateY(-2.6px);
+        }
+
+        75% {
+            transform: translateY(0);
+        }
+    }
+
+    @@keyframes act-shadow {
+        0%, 100% {
+            transform: scale(1);
+            opacity: .9;
+        }
+
+        35%, 50% {
+            transform: scale(.6);
+            opacity: .45;
+        }
+    }
+
+    @@keyframes act-day {
+        0%, 28% {
+            transform: translateX(0);
+            opacity: .55;
+        }
+
+        33%, 61% {
+            transform: translateX(4.5px);
+            opacity: 1;
+        }
+
+        66%, 94% {
+            transform: translateX(9px);
+            opacity: .55;
+        }
+
+        100% {
+            transform: translateX(0);
+            opacity: .55;
+        }
+    }
+
+    @@keyframes act-wobble {
+        0%, 100% {
+            transform: rotate(0deg);
+        }
+
+        25% {
+            transform: rotate(-12deg);
+        }
+
+        75% {
+            transform: rotate(12deg);
+        }
+    }
+
+    @@media (prefers-reduced-motion: reduce) {
+        .act-card, .act-card *, .sort-btn, .type-chip,
+        .dash-loader *, .dash-types, .dash-toolbar, .dash-grid {
+            animation: none !important;
+            transition: none !important;
+        }
+
+        .loader-ecg path {
+            stroke-dashoffset: 0;
+        }
+    }
+</style>
+
+@code {
+
+    private List<ActivityDTO> Activities { get; set; } = new();
+    private bool isLoading = true;   // true od začátku, ať se hned ukáže načítání
+    private string activeSort = "newest";
+    private string activityType = "all";
+    private List<string> activityTypeList = new();
+
+    // filtrovaný pohled na celý seznam (Activities se nepřepisuje)
+    private IEnumerable<ActivityDTO> VisibleActivities =>
+        activityType == "all"
+            ? Activities
+            : Activities.Where(a => a.EventType == activityType);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAllActivitiesAsync();
+        ActivityTypeList();
+    }
+
+    private async Task LoadAllActivitiesAsync()
+    {
+        isLoading = true;
+
+        try
+        {
+            var apiKey = Configuration["Garmin:PersonalKey"]!;
+
+            if (!string.IsNullOrEmpty(apiKey))
+            {
+                Activities = await GarminService.GetMyActivitiesAsync(apiKey);
+            }
+            else
+            {
+                //Logika pro to kdyz chyby api klic doplnit
+            }
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    // nastaveni druhu aktivity
+    private void SetActivityType(string type)
+    {
+        activityType = type;
+    }
+
+    // seznam druhu aktivit
+    private void ActivityTypeList()
+    {
+        if (Activities != null)
+        {
+            activityTypeList = Activities
+                .Select(a => a.EventType)
+                .Where(t => !string.IsNullOrWhiteSpace(t))
+                .Distinct()
+                .OrderBy(t => t)
+                .ToList();
+        }
+    }
+
+    // od nejstaršího
+    private void OrderByDateAsc()
+    {
+        if (Activities != null)
+        {
+            Activities = Activities
+                .OrderBy(a => a.StartTimeLocal)
+                .ToList();
+            activeSort = "oldest";
+        }
+    }
+
+    // od nejnovějšího
+    private void OrderByDateDesc()
+    {
+        if (Activities != null)
+        {
+            Activities = Activities
+                .OrderByDescending(a => a.StartTimeLocal)
+                .ToList();
+            activeSort = "newest";
+        }
+    }
+
+    // abecedne
+    private void OrderByNameAlph()
+    {
+        if (Activities != null)
+        {
+            Activities = Activities
+                .OrderBy(a => a.ActivityName, StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
+            activeSort = "name";
+        }
+    }
+
+    // nejrychlejší (aktivity bez rychlosti na konec)
+    private void OrderByFastest()
+    {
+        if (Activities != null)
+        {
+            Activities = Activities
+                .OrderBy(a => a.AverageSpeed is > 0 ? 0 : 1)
+                .ThenByDescending(a => a.AverageSpeed)
+                .ToList();
+            activeSort = "fastest";
+        }
+    }
+
+    // nejpomalejší (aktivity bez rychlosti na konec)
+    private void OrderBySlowest()
+    {
+        if (Activities != null)
+        {
+            Activities = Activities
+                .OrderBy(a => a.AverageSpeed is > 0 ? 0 : 1)
+                .ThenBy(a => a.AverageSpeed)
+                .ToList();
+            activeSort = "slowest";
+        }
+    }
+
+    // nejkratší (aktivity bez vzdálenosti na konec)
+    private void OrderByShortest()
+    {
+        if (Activities != null)
+        {
+            Activities = Activities
+                .OrderBy(a => a.Distance is > 0 ? 0 : 1)
+                .ThenBy(a => a.Distance)
+                .ToList();
+            activeSort = "shortest";
+        }
+    }
+
+    // nejdelší (aktivity bez vzdálenosti na konec)
+    private void OrderByLongest()
+    {
+        if (Activities != null)
+        {
+            Activities = Activities
+                .OrderBy(a => a.Distance is > 0 ? 0 : 1)
+                .ThenByDescending(a => a.Distance)
+                .ToList();
+            activeSort = "longest";
+        }
+    }
+}
